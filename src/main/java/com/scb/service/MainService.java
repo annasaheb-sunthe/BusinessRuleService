@@ -21,4 +21,6 @@ public interface MainService {
 	void ModifyBusinessRules(BusinessRules businessrules);
 
 	ResponseMessage validateBusinessRules(RequestData requestData);
+	
+	public void deleteBusinessRule(String ruleCode);
 }

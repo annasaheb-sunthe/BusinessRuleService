@@ -62,11 +62,6 @@ public class MainServiceImpl implements MainService {
 		return obj;
 	}
 
-	/*
-	 * public List<String> XMLServiceValidation(String XPath) { XPathConverstion
-	 * xpathconvert = new XPathConverstion();
-	 * List<String>rules=xpathconvert.XPathConversion(XPath); return rules; }
-	 */
 	@Override
 	public List<BusinessRules> getBusinessRulesByTypeandCountryCode(String transactionType, String transactionSubType) {
 		List<BusinessRules> list = businessrulesrepo.getBussinessRulesByTypeandCountryCode(transactionType,
@@ -82,105 +77,106 @@ public class MainServiceImpl implements MainService {
 
 	@Override
 	public ResponseMessage validateBusinessRules(RequestData requestData) {
-		log.info("Received Request Data : " + requestData);
+		log.info("Request data - TransactionType :" + requestData.getTransactionType() + ", TransactionSubType :" 
+				+ requestData.getTransactionSubType() + ", payloadFormat :" + requestData.getPayloadFormat());
 
 		// Retrieve business rules
 		List<BusinessRules> list = mainservice.getBusinessRulesByTypeandCountryCode(requestData.getTransactionType(),
 				requestData.getTransactionSubType());
 
-		log.info("List of Business Rules : " + list);
+		log.info("List of Business Rules :" + list);
 		Iterator<BusinessRules> idr = list.iterator();
 		BusinessRules bussinessRuleVar = null;
-		String s1 = "";
+		String errorMessage = "";
 		// Map<Long, String> nameMap = new HashMap<>();
 
 		while (idr.hasNext()) {
 			bussinessRuleVar = (BusinessRules) idr.next();
 
 			String data = xpathconversion.getXPathExpressionValue(bussinessRuleVar.getOperandOne(), requestData.getPayload());
-			log.info("Operand 1: " + bussinessRuleVar.getOperandOne());
+			log.info("Operand 1 :" + bussinessRuleVar.getOperandOne());
 			log.info("Value of XPath expression : " + data);
 
 			String operator = bussinessRuleVar.getOperartor();
-			log.info("Operator : " + operator);
+			log.info("Operator :" + operator);
 			String operandTwo = bussinessRuleVar.getOperandTwo();
-			log.info("Operand 2 : " + operandTwo);
-			String[] values = operandTwo.split(",");
-
-			if (operator.equals("EQUAL")) {
-				int found = 0;
-				for (String op2 : values) {
-					log.info("op2 : " + op2);
-					if ((data).equals(op2)) {
-						found = 1;
-						break;
-					} else {
-						found = 0;
+			log.info("Operand 2 :" + operandTwo);
+			String[] values = null;
+			List<String> listOfOperandTwoValues = null;
+			if(operandTwo != null) {
+				values = operandTwo.split(",");
+				if(values != null && values.length > 0) {
+					listOfOperandTwoValues = new ArrayList<String>();
+					for (String op2 : values) {
+						listOfOperandTwoValues.add(op2);
 					}
-				}
-				if (found == 1) {
-
-				} else {
-					s1 += bussinessRuleVar.getErrorMessage() + "\n";
-				}
-
-			} else if (operator.equals("NOTEQUAL")) {
-				int found = 0;
-				for (String op2 : values) {
-					log.info("op2 : " + op2);
-					if ((data).equals(op2)) {
-						found = 1;
-						break;
-					} else {
-						found = 0;
-					}
-				}
-				
-				if (found == 1) {
-					s1 += bussinessRuleVar.getErrorMessage() + "\n";
-				} else {
-
 				}
 			}
 
-			else if (operator.equals("NULL")) {
-				if ((data).equals("")) {
-					// s1=s1;
-				} else {
-					s1 += bussinessRuleVar.getErrorMessage() + "\n";
-				}
-			} else if (operator.equals("NOTNULL")) {
-				if ((data).equals(" ")) {
-					s1 += bussinessRuleVar.getErrorMessage() + "\n";
-				} else {
-					// s1=s1;
-				}
+			try {
+				//Equal biz rule fails, add error message
+				if (operator.equals("EQUAL") && !listOfOperandTwoValues.contains(data)) {
+					errorMessage += bussinessRuleVar.getErrorMessage() + "\n";
+				} else if (operator.equals("NOTEQUAL") && listOfOperandTwoValues.contains(data)) {
+					errorMessage += bussinessRuleVar.getErrorMessage() + "\n";
+				} else if (operator.equals("NULL") && (data != null && !data.isEmpty())) {
+					errorMessage += bussinessRuleVar.getErrorMessage() + "\n";
+				} else if (operator.equals("NOTNULL") && (data == null || data.isEmpty())) {
+					errorMessage += bussinessRuleVar.getErrorMessage() + "\n";
+				} else if(operator.equals("GREATER")) {
+					  double operand1 = Double.parseDouble(data);
+					  double operand2 = Double.parseDouble(operandTwo);
+					  if(!(operand1 <= operand2)) {
+						  errorMessage += bussinessRuleVar.getErrorMessage()+bussinessRuleVar.getOperandTwo() + "\n";
+					  }
+				  
+				  } else if(operator.equals("GREATERTHANEQUAL")) {
+					  double operand1 = Double.parseDouble(data);
+					  double operand2 = Double.parseDouble(operandTwo);
+					  if(operand1 < operand2) {
+						  errorMessage += bussinessRuleVar.getErrorMessage()+bussinessRuleVar.getOperandTwo() + "\n";
+					  }
+				  
+				  } else if(operator.equals("LESSER")) {
+					  double operand1 = Double.parseDouble(data);
+					  double operand2 = Double.parseDouble(operandTwo);
+					  if(!(operand1 >= operand2)) {
+						  errorMessage += bussinessRuleVar.getErrorMessage()+bussinessRuleVar.getOperandTwo() + "\n";
+					  }
+				  
+				  }else if(operator.equals("LESSTHANEQUAL")) {
+					  double operand1 = Double.parseDouble(data);
+					  double operand2 = Double.parseDouble(operandTwo);
+					  if(operand1 > operand2) {
+						  errorMessage += bussinessRuleVar.getErrorMessage()+bussinessRuleVar.getOperandTwo() + "\n";
+					  }
+				  }
+			} catch (NumberFormatException e) {
+				String exceptionMsg = "NumberFormatException occured while parsing Operand 1 :" + data +", and Operand 2 :" + operandTwo;
+				log.info(exceptionMsg);
+				errorMessage += exceptionMsg;
+				e.printStackTrace();
 			}
-			/*
-			 * else if(operator.equals("GREATER")) {
-			 * 
-			 * } else if(operator.equals("GREATERTHANEQUAL")) {
-			 * 
-			 * } else if(operator.equals("LESSTHANEQUAL")) {
-			 * 
-			 * }
-			 */
-
+			  
 			log.info("----------------------------------------------------");
 		}
 
-		log.info("Error in Business: " + s1);
-		
 		ResponseMessage rm = new ResponseMessage();
-		if (s1.isEmpty()) {
+		if (errorMessage.isEmpty()) {
 			rm.setResponseCode(200);
 			rm.setResponseMessage("Business rules valudation successful");
 		} else {
 			rm.setResponseCode(400);
-			rm.setResponseMessage("Business rules valudation failed: " + s1);
+			rm.setResponseMessage("Business rules valudation failed: " + errorMessage);
+			log.info("Error in business rule validation :" + errorMessage);
 		}
 		
 		return rm;
+	}
+
+	@Override
+	public void deleteBusinessRule(String ruleCode) {
+		businessrulesrepo.delete(getBusinessRule(ruleCode));
 	}
 
 	public String getCurrentDateTime() {
